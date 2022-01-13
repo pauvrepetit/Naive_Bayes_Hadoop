@@ -64,11 +64,6 @@ class TextPair implements WritableComparable<TextPair> {
         second.readFields(in);
     }
 
-    // @Override
-    // public int hashCode() {
-    //     return first.hashCode() * 163 + second.hashCode();
-    // }
-
     @Override
     public boolean equals(Object o) {
         if (o instanceof TextPair) {
@@ -100,9 +95,6 @@ class ClassTermRecordTeader extends RecordReader<TextPair, IntWritable> {
     TextPair class_term_pair = new TextPair();
     IntWritable one = new IntWritable(1);
     Configuration conf;
-    int count = 0; // 这是当前访问到的文件数量
-    int all_count = 1; // 这是待访问的文件总数
-    boolean finish = false;
 
     LineRecordReader lineRecordReader;
 
@@ -114,6 +106,8 @@ class ClassTermRecordTeader extends RecordReader<TextPair, IntWritable> {
         classname.set(ss[ss.length - 2]);
 
         this.conf = context.getConfiguration();
+        // 我们直接使用一个lineRecordReader来读取文件，而不需要我们自己手动操作
+        // 我们只需要对它输出的K-V对进行进行一定的调整，向其中添加一个类型名信息即可，这个我们在getCurrentKey中完成即可
         lineRecordReader = new LineRecordReader();
         lineRecordReader.initialize(split, context);
     }
@@ -122,7 +116,7 @@ class ClassTermRecordTeader extends RecordReader<TextPair, IntWritable> {
      * 判断是否还有输入需要读取，如果有，就返回true，此时hadoop将调用getCurrentKey和getCurrentValue来获取<key,value>对，并将其传递给map函数
      * 如果输入全部读取完成，返回false，当前map任务的输入结束
      * 
-     * 对于先验概率的训练，每一个文件我们只需要读取它的类型，也就是我们文件路径中的倒数第二个字符串，我们将该字符串作为key，value置为1，传递给map作为输入
+     * 我们直接从lineRecordReader中获取文件读取状态
      */
     @Override
     public boolean nextKeyValue() throws IOException, InterruptedException {
@@ -130,7 +124,7 @@ class ClassTermRecordTeader extends RecordReader<TextPair, IntWritable> {
     }
 
     /**
-     * 返回的<key,value>对中的key，为当前文档的类型
+     * 返回的<key,value>对中的key，它是一个由类型名classname和分词term组成的Pair
      */
     @Override
     public TextPair getCurrentKey() throws IOException, InterruptedException {
@@ -149,7 +143,7 @@ class ClassTermRecordTeader extends RecordReader<TextPair, IntWritable> {
 
     /**
      * 返回当前输入的进度，返回一个进度的百分比
-     * 我们可以在读取结束后返回1，否则返回0，也就是判断标志位finish
+     * 由于我们直接使用lineRecordReader来对文件进行读取，我们的一个map任务只处理这一个lineRecordReader，因此可以直接使用它的progress作为我们的map任务的progress
      */
     @Override
     public float getProgress() throws IOException, InterruptedException {
@@ -186,7 +180,7 @@ public class ClassTerm {
     public static class TokenizerMapper extends Mapper<TextPair, IntWritable, TextPair, IntWritable> {
 
         /**
-         * map函数，直接将输入的<classname,1>对向后传递，不需要进行其他操作
+         * map函数，直接将输入的<<classname,term>,1>对向后传递，不需要进行其他操作
          */
         public void map(TextPair key, IntWritable value, Context context) throws IOException, InterruptedException {
             context.write(key, value);
@@ -197,7 +191,7 @@ public class ClassTerm {
         private IntWritable sum_value = new IntWritable();
 
         /**
-         * reduce函数，对于输入的<classname,{value1,value2...}>，将所有的value相加，得到value，输出<classname,value>，classname是一个类型名，value是该类型的文档出现的总次数
+         * reduce函数，对于输入的<<classname,term>,{value1,value2...}>，将所有的value相加，得到value，输出<<classname,term>,value>，classname是类型名，term是分词，value是在类型classname的文档中分词term出现的总次数
          */
         public void reduce(TextPair key, Iterable<IntWritable> values, Context context)
                 throws IOException, InterruptedException {

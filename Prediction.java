@@ -104,7 +104,7 @@ class ConditionalProbability {
     }
 
     /**
-     * 计算条件概率，对于一个单词term和一个类别class，可以求一个条件概率P(term|class)
+     * 计算似然概率，对于一个单词term和一个类别class，可以求一个似然概率P(term|class)
      * 分子是类别是class的文档中，单词term出现的次数，加1，就是condProbability中加载的那个值+1
      * 分母是类别是class的文档中，所有单词的总数，加单词的种类数(也就是所有的文档中，一共有多少种不同的单词)
      * 分母的前者，我们就是classTermCount中统计的值，后者，就是allTermCount的值
@@ -116,17 +116,17 @@ class ConditionalProbability {
     }
 
     /**
-     * 获取单词term在类型className上的条件概率
+     * 获取单词term在类型className上的似然概率
      *
      * @param className 类型
      * @param term      单词
-     * @return 条件概率
+     * @return 似然概率
      */
     public double get(String className, String term) {
         try {
             return condProbability.get(className).get(term);
         } catch (Exception e) {
-            // 如果类型className的文档中没有出现过单词term，那么我们的condProbability中是不存在它对应的条件概率的
+            // 如果类型className的文档中没有出现过单词term，那么我们的condProbability中是不存在它对应的似然概率的
             // 此时，我们做一个单独的计算
             return 1.0 / (classTermCount.get(className) + allTermCount);
         }
@@ -152,13 +152,13 @@ public class Prediction {
 
     /**
      * 计算后验概率的对数，我们需要求文档docTerms属于每一个类型的概率
-     * 对于类型i，后验概率等于类型i的先验概率 乘以 每一个单词属于类型i的条件概率
+     * 对于类型i，后验概率等于类型i的先验概率 乘以 每一个单词属于类型i的似然概率
      * 前者，在pp中取一个值即可，后者，对docTerms中的每个单词，结合类型i，在cp中取一个值
      * 为了保证浮点数计算不会向下溢出，我们对这个计算过程取对数，也就是把取出来的值都取对数，然后乘法就变成了加法
      *
      * @param docTerms 待分类的文档的内容信息，term，count，单词以及每个单词出现的次数
      * @param pp       先验概率，包含了各种类型信息，以及每种类型的概率
-     * @param cp       条件概率，包含了类型、单词
+     * @param cp       似然概率，包含了类型、单词
      * @return 返回文档属于各种类型的后验概率
      */
     private static Map<String, Double> computePosteriorProbability(Map<String, Integer> docTerms, PriorProbability pp
@@ -195,12 +195,12 @@ public class Prediction {
 
     public static void main(String[] args) throws IOException {
         if (args.length != 3) {
-            // 输入3个参数，先验概率、条件概率、待预测文档
+            // 输入3个参数，先验概率、似然概率、待预测文档
             System.out.println("args error. Prediction <classCountOutput> <classTermOutput> <document dir>");
             return;
         }
         String classCountFilename = args[0];    // 统计各类别的文档的数量的mapreduce任务的输出文件，用于计算先验概率
-        String classTermFilename = args[1];     // 统计类别、单词出现次数的mapreduce任务的输出文件，用于计算条件概率
+        String classTermFilename = args[1];     // 统计类别、单词出现次数的mapreduce任务的输出文件，用于计算似然概率
         String prePredictDocumentFilenameDir = args[2];    // 待预测的文档所在的目录
 
         PriorProbability priorProbability = new PriorProbability(classCountFilename);

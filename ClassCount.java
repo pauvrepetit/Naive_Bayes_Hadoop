@@ -45,18 +45,19 @@ class ClassnameRecordReader extends RecordReader<Text, IntWritable> {
      * 判断是否还有输入需要读取，如果有，就返回true，此时hadoop将调用getCurrentKey和getCurrentValue来获取<key,value>对，并将其传递给map函数
      * 如果输入全部读取完成，返回false，当前map任务的输入结束
      * 
-     * 对于先验概率的训练，每一个文件我们只需要读取它的类型，也就是我们文件路径中的倒数第二个字符串，我们将该字符串作为key，value置为1，传递给map作为输入
+     * files是输入的一个目录下面的文件列表，我们在init中通过文件系统操作获取到的
+     * 我们这里做的就是对于files中的每一个文件，输出一个<classname,1>的K-V对，我们不需要去具体的访问这些文件，只需要从文件路径中获取到其对应的类型信息即可
      */
     @Override
     public boolean nextKeyValue() throws IOException, InterruptedException {
         if (count < all_count) {
-            // 文件还没访问完，返回true，设置classname
+            // 还有文件没有访问，返回true，设置classname
             String[] ss = files[count].getPath().toString().split("/");
             classname.set(ss[ss.length - 2]);
             count++;
             return true;
         } else {
-            // 文件全部访问完了，返回false
+            // 所有文件都访问完了，返回false
             finish = true;
             return false;
         }
@@ -80,7 +81,7 @@ class ClassnameRecordReader extends RecordReader<Text, IntWritable> {
 
     /**
      * 返回当前输入的进度，返回一个进度的百分比
-     * 我们可以在读取结束后返回1，否则返回0，也就是判断标志位finish
+     * 一个map任务就是遍历一个目录下的每个文件，我们知道目录下的文件总数为all_count，知道当前访问过的文件数量count，因此可以计算进度
      */
     @Override
     public float getProgress() throws IOException, InterruptedException {
@@ -94,7 +95,7 @@ class ClassnameRecordReader extends RecordReader<Text, IntWritable> {
 
 /**
  * classInputFormat
- * map的输入数据的类型，通过recordReader不断获取输入的<key,value>对
+ * map的输入数据的类型，通过recordReader不断获取输入的<key,value>对，我们要做的就是创建并返回一个我们自定义的recordReader对象
  */
 class classInputFormat extends FileInputFormat<Text, IntWritable> {
 
@@ -128,7 +129,8 @@ public class ClassCount {
         private IntWritable sum_value = new IntWritable();
 
         /**
-         * reduce函数，对于输入的<classname,{value1,value2...}>，将所有的value相加，得到value，输出<classname,value>，classname是一个类型名，value是该类型的文档出现的总次数
+         * reduce函数，对于输入的<classname,{value1,value2...}>，将所有的value相加，得到value，输出<classname,value>
+         * classname是一个类型名，value是该类型的文档出现的总次数
          */
         public void reduce(Text key, Iterable<IntWritable> values, Context context)
                 throws IOException, InterruptedException {
